@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using TShockAPI;
+﻿using TShockAPI;
 using TShockAPI.DB;
 
-namespace Commander
+namespace Commander;
+
+public class CommandCollection
 {
-  public class CommandCollection
-  {
-    private Dictionary<User, DateTime> _lastUsed;
+    private Dictionary<UserAccount, DateTime> _lastUsed;
 
     public string[] Aliases { get; set; }
 
@@ -25,73 +22,72 @@ namespace Commander
 
     public Command ToCommand()
     {
-      var dlg = (CommandDelegate) Delegate.CreateDelegate(typeof(CommandDelegate), this, "Execute");
+        var dlg = (CommandDelegate)Delegate.CreateDelegate(typeof(CommandDelegate), this, "Execute");
 
-      var cmd = string.IsNullOrEmpty(UsagePermission)
-        ? new Command(dlg, Aliases)
-        : new Command(UsagePermission, dlg, Aliases);
+        var cmd = string.IsNullOrEmpty(UsagePermission)
+          ? new Command(dlg, Aliases)
+          : new Command(UsagePermission, dlg, Aliases);
 
-      if (!string.IsNullOrEmpty(HelpSummary))
-        cmd.HelpText = HelpSummary;
+        if (!string.IsNullOrEmpty(HelpSummary))
+            cmd.HelpText = HelpSummary;
 
-      if (HelpText != null && HelpText.Length > 0)
-        cmd.HelpDesc = HelpText;
+        if (HelpText != null && HelpText.Length > 0)
+            cmd.HelpDesc = HelpText;
 
-      cmd.AllowServer = AllowServer;
+        cmd.AllowServer = AllowServer;
 
-      return cmd;
+        return cmd;
     }
 
     public void Execute(CommandArgs args)
     {
-      try
-      {
-        Execute(args.Player, args.Parameters.ToArray());
-      }
-      catch (CommandException ex)
-      {
-        args.Player.SendErrorMessage(ex.Message);
-      }
+        try
+        {
+            Execute(args.Player, args.Parameters.ToArray());
+        }
+        catch (CommandException ex)
+        {
+            args.Player.SendErrorMessage(ex.Message);
+        }
     }
 
     public void Execute(TSPlayer executor, params string[] args)
     {
-      if (!executor.HasPermission(UsagePermission))
-        throw new CommandException(CommandError.NoPermission);
+        if (!executor.HasPermission(UsagePermission))
+            throw new CommandException(CommandError.NoPermission);
 
-      if (ExpectedParameterCount > args.Length)
-        throw new CommandException(CommandError.NotEnoughParameters, ExpectedParameterCount);
+        if (ExpectedParameterCount > args.Length)
+            throw new CommandException(CommandError.NotEnoughParameters, ExpectedParameterCount);
 
-      if (Cooldown != 0 && _lastUsed == null)
-        _lastUsed = new Dictionary<User, DateTime>();
+        if (Cooldown != 0 && _lastUsed == null)
+            _lastUsed = new Dictionary<UserAccount, DateTime>();
 
-      if (executor.User != null && Cooldown != 0 &&
-          _lastUsed.TryGetValue(executor.User, out DateTime lastUsed) &&
-          (DateTime.Now - lastUsed).TotalSeconds < Cooldown)
-        throw new CommandException(CommandError.Cooldown,
-          Math.Round(Cooldown - (DateTime.Now - lastUsed).TotalSeconds));
+        if (executor.Account != null && Cooldown != 0 &&
+            _lastUsed.TryGetValue(executor.Account, out DateTime lastUsed) &&
+            (DateTime.Now - lastUsed).TotalSeconds < Cooldown)
+            throw new CommandException(CommandError.Cooldown,
+              Math.Round(Cooldown - (DateTime.Now - lastUsed).TotalSeconds));
 
-      if (Commands.Length == 0)
-        throw new InvalidOperationException("There are no commands defined in this collection.");
+        if (Commands.Length == 0)
+            throw new InvalidOperationException("There are no commands defined in this collection.");
 
-      if (!AllowServer && !executor.ConnectionAlive) return;
+        if (!AllowServer && !executor.ConnectionAlive) return;
 
-      if (executor.User != null && Cooldown != 0)
-        _lastUsed[executor.User] = DateTime.Now;
+        if (executor.Account != null && Cooldown != 0)
+            _lastUsed[executor.Account] = DateTime.Now;
 
-      var target = executor.RealPlayer ? new CommandExecutor(executor.Index) : new CommandExecutorServer();
+        var target = executor.RealPlayer ? new CommandExecutor(executor.Index) : new CommandExecutorServer();
 
-      foreach (var cmd in Commands)
-      {
-        if (!cmd.TryExecute(target, args))
-          throw new CommandException(CommandError.Unspecified);
+        foreach (var cmd in Commands)
+        {
+            if (!cmd.TryExecute(target, args))
+                throw new CommandException(CommandError.Unspecified);
 
-        if (cmd.StopOnError && target.LastErrorMessage != null)
-          throw new CommandException(target.LastErrorMessage);
+            if (cmd.StopOnError && target.LastErrorMessage != null)
+                throw new CommandException(target.LastErrorMessage);
 
-        if (cmd.StopOnInfo && target.LastInfoMessage != null)
-          throw new CommandException(target.LastInfoMessage);
-      }
+            if (cmd.StopOnInfo && target.LastInfoMessage != null)
+                throw new CommandException(target.LastInfoMessage);
+        }
     }
-  }
 }
